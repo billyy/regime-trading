@@ -1,0 +1,156 @@
+{
+  "NVDA": {
+    "optimal_lookback": 150,
+    "best_sharpe": 7.366,
+    "total_return": 13.95,
+    "num_trades": 7,
+    "time_s": 53.9
+  },
+  "AMD": {
+    "optimal_lookback": 180,
+    "best_sharpe": 0.0,
+    "total_return": 0.0,
+    "num_trades": 0,
+    "time_s": 51.1
+  },
+  "AMZN": {
+    "optimal_lookback": 270,
+    "best_sharpe": 3.9025,
+    "total_return": 8.78,
+    "num_trades": 8,
+    "time_s": 50.5
+  },
+  "META": {
+    "optimal_lookback": 360,
+    "best_sharpe": 3.1881,
+    "total_return": 64.03,
+    "num_trades": 9,
+    "time_s": 46.2
+  },
+  "MSFT": {
+    "optimal_lookback": 180,
+    "best_sharpe": 0.8707,
+    "total_return": -20.33,
+    "num_trades": 7,
+    "time_s": 39.8
+  },
+  "GOOGL": {
+    "optimal_lookback": 180,
+    "best_sharpe": 4.5914,
+    "total_return": 28.46,
+    "num_trades": 9,
+    "time_s": 42.2
+  },
+  "AAPL": {
+    "optimal_lookback": 150,
+    "best_sharpe": 3.2446,
+    "total_return": 5.8,
+    "num_trades": 5,
+    "time_s": 53.6
+  },
+  "TSLA": {
+    "optimal_lookback": 360,
+    "best_sharpe": 3.5477,
+    "total_return": 19.0,
+    "num_trades": 16,
+    "time_s": 55.4
+  },
+  "NFLX": {
+    "optimal_lookback": 90,
+    "best_sharpe": 6.9694,
+    "total_return": 6.83,
+    "num_trades": 2,
+    "time_s": 42.4
+  },
+  "INTU": {
+    "optimal_lookback": 180,
+    "best_sharpe": 10.0933,
+    "total_return": 44.77,
+    "num_trades": 2,
+    "time_s": 40.2
+  },
+  "TSM": {
+    "optimal_lookback": 360,
+    "best_sharpe": 7.0721,
+    "total_return": -2.45,
+    "num_trades": 17,
+    "time_s": 52.4
+  },
+  "TMO": {
+    "optimal_lookback": 240,
+    "best_sharpe": 0.0,
+    "total_return": 23.97,
+    "num_trades": 4,
+    "time_s": 52.2
+  },
+  "UNH": {
+    "optimal_lookback": 150,
+    "best_sharpe": 1.653,
+    "total_return": 4.1,
+    "num_trades": 6,
+    "time_s": 49.3
+  },
+  "ORCL": {
+    "optimal_lookback": 330,
+    "best_sharpe": 3.4898,
+    "total_return": 44.49,
+    "num_trades": 5,
+    "time_s": 51.9
+  },
+  "MA": {
+    "optimal_lookback": 120,
+    "best_sharpe": 2.5232,
+    "total_return": 2.87,
+    "num_trades": 3,
+    "time_s": 53.3
+  },
+  "V": {
+    "optimal_lookback": 270,
+    "best_sharpe": 3.8551,
+    "total_return": 12.29,
+    "num_trades": 7,
+    "time_s": 60.6
+  },
+  "CRM": {
+    "optimal_lookback": 270,
+    "best_sharpe": 3.5477,
+    "total_return": -30.59,
+    "num_trades": 13,
+    "time_s": 55.7
+  },
+  "GDX": {
+    "optimal_lookback": 300,
+    "best_sharpe": 5.968,
+    "total_return": 234.97,
+    "num_trades": 17,
+    "time_s": 54.5
+  },
+  "SLV": {
+    "optimal_lookback": 180,
+    "best_sharpe": 7.3792,
+    "total_return": 268.43,
+    "num_trades": 3,
+    "time_s": 50.7
+  },
+  "GLD": {
+    "optimal_lookback": 180,
+    "best_sharpe": 3.5057,
+    "total_return": 38.5,
+    "num_trades": 4,
+    "time_s": 51.1
+  },
+  "QQQ": {
+    "optimal_lookback": 120,
+    "best_sharpe": 3.5477,
+    "total_return": 2.75,
+    "num_trades": 3,
+    "time_s": 54.5
+  },
+  "SPY": {
+    "optimal_lookback": 360,
+    "best_sharpe": 5.7196,
+    "total_return": 3.46,
+    "num_trades": 17,
+    "time_s": 56.4
+  }
+}
