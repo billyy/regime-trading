@@ -10,13 +10,26 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from config import (
+    DEFAULT_LEVERAGE,
+    COOLDOWN_HOURS,
+    ENTRY_THRESHOLD,
+    STOP_LOSS_PCT,
+    MIN_CONFIDENCE,
+)
 from regime_engine import (
+    fetch_data,
+    compute_features,
+    train_hmm,
+    label_regimes,
+    build_regime_df,
     run_regime_detection,
     run_regime_detection_wfo,
     sweep_lookback_periods,
     REGIME_COLORS,
+    get_regime_color,
 )
-from strategy import compute_indicators, backtest, performance_metrics, evaluate_conditions, COOLDOWN_HOURS
+from strategy import compute_indicators, backtest, performance_metrics, evaluate_conditions
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Regime Trading System", layout="wide", page_icon="📈")
@@ -41,6 +54,19 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
+# ── Caching ──────────────────────────────────────────────────────────────────
+
+@st.cache_data(ttl=300, show_spinner=False)
+def cached_fetch_data(ticker, period_days):
+    return fetch_data(ticker, period_days)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def cached_regime_detection(ticker, period_days, n_components):
+    return run_regime_detection(ticker, period_days, n_components)
+
+
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 st.sidebar.title("⚙️ Configuration")
 ticker = st.sidebar.text_input("Ticker Symbol", value="BTC-USD")
@@ -52,8 +78,15 @@ if "optimal_lookback" not in st.session_state:
 default_period = st.session_state["optimal_lookback"] or 730
 period_days = st.sidebar.slider("Training Period (days)", 60, 1460, default_period)
 n_components = st.sidebar.slider("HMM Components", 3, 10, 7)
-leverage = st.sidebar.slider("Max Leverage", 1.0, 10.0, 2.5, step=0.5)
+leverage = st.sidebar.slider("Max Leverage", 1.0, 10.0, DEFAULT_LEVERAGE, step=0.5)
 dynamic_leverage = st.sidebar.checkbox("Dynamic Leverage (scale by HMM confidence)", value=True)
+
+# ── Strategy tuning ──────────────────────────────────────────────────────────
+st.sidebar.markdown("---")
+st.sidebar.subheader("Strategy Tuning")
+entry_threshold = st.sidebar.slider("Entry Threshold (of 8 conditions)", 1, 8, ENTRY_THRESHOLD)
+stop_loss_pct = st.sidebar.slider("Stop-Loss (%)", 0, 50, int(STOP_LOSS_PCT * 100), step=1) / 100.0
+min_confidence = st.sidebar.slider("Min HMM Confidence", 0.0, 1.0, MIN_CONFIDENCE, step=0.05)
 
 # ── Walk-Forward Optimization section ────────────────────────────────────────
 st.sidebar.markdown("---")
@@ -81,12 +114,15 @@ sweep_btn = st.sidebar.button("🔍 Find Optimal Lookback", use_container_width=
 
 st.sidebar.markdown("---")
 lev_mode = "Dynamic (confidence-scaled)" if dynamic_leverage else f"Static **{leverage}x**"
+stop_loss_label = f"{stop_loss_pct*100:.0f}%" if stop_loss_pct > 0 else "Disabled"
 st.sidebar.markdown(
     f"**Strategy Parameters**\n"
     f"- Max Leverage: **{leverage}x**\n"
     f"- Mode: {lev_mode}\n"
     f"- Cooldown: **{COOLDOWN_HOURS}h**\n"
-    f"- Entry rule: **7 of 8** conditions\n"
+    f"- Entry rule: **{entry_threshold} of 8** conditions\n"
+    f"- Stop-loss: **{stop_loss_label}**\n"
+    f"- Min confidence: **{min_confidence:.0%}**\n"
     f"- Exit: regime → Bear / Crash"
 )
 
@@ -113,14 +149,21 @@ if run_btn:
         regime_df = compute_indicators(regime_df)
     else:
         with st.spinner("Fetching data and training HMM…"):
-            regime_df, model, scaler, mapping, features = run_regime_detection(
+            regime_df, model, scaler, mapping, features = cached_regime_detection(
                 ticker, period_days, n_components
             )
             regime_df = compute_indicators(regime_df)
 
     # ── Step 2: Backtest ─────────────────────────────────────────────────────
     with st.spinner("Running backtest…"):
-        result_df, trade_log = backtest(regime_df, leverage=leverage, dynamic_leverage=dynamic_leverage)
+        result_df, trade_log = backtest(
+            regime_df,
+            leverage=leverage,
+            dynamic_leverage=dynamic_leverage,
+            entry_threshold=entry_threshold,
+            stop_loss_pct=stop_loss_pct if stop_loss_pct > 0 else None,
+            min_confidence=min_confidence,
+        )
         metrics = performance_metrics(result_df, trade_log)
 
     # ── Current signal ───────────────────────────────────────────────────────
@@ -128,8 +171,8 @@ if run_btn:
     current_regime = last_row["regime"]
     current_signal = last_row["signal"]
 
-    signal_color = {"LONG": "green", "ENTER": "green", "EXIT": "red", "CASH": "gray", "COOLDOWN": "gray"}
-    display_signal = "LONG" if current_signal in ("LONG", "ENTER") else ("SHORT / EXIT" if current_signal == "EXIT" else "CASH")
+    signal_color = {"LONG": "green", "ENTER": "green", "EXIT": "red", "CASH": "gray", "COOLDOWN": "gray", "BLOWN_UP": "red"}
+    display_signal = "LONG" if current_signal in ("LONG", "ENTER") else ("SHORT / EXIT" if current_signal == "EXIT" else ("BLOWN UP" if current_signal == "BLOWN_UP" else "CASH"))
 
     current_confidence = last_row.get("confidence", 1.0)
     effective_lev = leverage * current_confidence if dynamic_leverage else leverage
@@ -144,7 +187,7 @@ if run_btn:
             unsafe_allow_html=True,
         )
     with col_reg:
-        rc = REGIME_COLORS.get(current_regime, "#9e9e9e")
+        rc = get_regime_color(current_regime)
         st.markdown(
             f'<div class="metric-card"><h3>Current Regime</h3>'
             f'<p style="color:{rc}">{current_regime}</p></div>',
@@ -226,8 +269,10 @@ if run_btn:
         row=1, col=1,
     )
 
-    # Regime background shading
-    for regime_name, color in REGIME_COLORS.items():
+    # Regime background shading — use unique regime names from the data
+    unique_regimes = result_df["regime"].unique()
+    for regime_name in unique_regimes:
+        color = get_regime_color(regime_name)
         mask = result_df["regime"] == regime_name
         if mask.any():
             fig.add_trace(
@@ -270,12 +315,11 @@ if run_btn:
         row=2, col=1,
     )
 
-    # Regime timeline (numeric encoding)
-    regime_to_num = {name: i for i, name in enumerate(
-        ["Crash", "Bearish", "Mild Bear", "Neutral", "Mild Bull", "Bullish", "Bull Run"]
-    )}
+    # Regime timeline (numeric encoding) — assign sequential numbers to actual regimes
+    unique_sorted = sorted(unique_regimes, key=lambda r: list(REGIME_COLORS.keys()).index(r) if r in REGIME_COLORS else 3)
+    regime_to_num = {name: i for i, name in enumerate(unique_sorted)}
     result_df["regime_num"] = result_df["regime"].map(regime_to_num)
-    regime_colors_mapped = result_df["regime"].map(REGIME_COLORS)
+    regime_colors_mapped = result_df["regime"].map(lambda r: get_regime_color(r))
     fig.add_trace(
         go.Bar(
             x=result_df.index, y=result_df["regime_num"],
@@ -315,7 +359,7 @@ if run_btn:
                 icon = "✅" if cond_met else "❌"
                 st.markdown(f"**{icon} {cond_name}**")
 
-        st.markdown(f"**Conditions met: {passed} / 8** (need ≥ 7)")
+        st.markdown(f"**Conditions met: {passed} / 8** (need ≥ {entry_threshold})")
 
     # ── Trade log ────────────────────────────────────────────────────────────
     st.markdown("---")
@@ -350,7 +394,7 @@ if run_btn:
         go.Pie(
             labels=regime_counts.index,
             values=regime_counts.values,
-            marker=dict(colors=[REGIME_COLORS.get(r, "#9e9e9e") for r in regime_counts.index]),
+            marker=dict(colors=[get_regime_color(r) for r in regime_counts.index]),
             hole=0.4,
         )
     )
@@ -427,15 +471,15 @@ else:
     st.markdown(
         """
         ### How it works
-        1. **Data Fetch** — Downloads hourly OHLCV data via yfinance (+ VIX as 4th feature)
-        2. **Feature Engineering** — Computes log returns, price range, volume volatility, and VIX
-        3. **HMM Training** — Fits a 7-state Gaussian HMM to classify market regimes
-        4. **Strategy Execution** — Enters long when Bullish + 7/8 indicator conditions met; exits on Bear/Crash
-        5. **Risk Management** — 2.5x leverage with 48-hour cooldown after exits
+        1. **Data Fetch** — Downloads hourly OHLCV data via yfinance
+        2. **Feature Engineering** — Computes log returns, price range, volume volatility, and historical volatility
+        3. **HMM Training** — Fits a multi-state Gaussian HMM to classify market regimes
+        4. **Strategy Execution** — Enters long when Bullish + conditions met; exits on Bear/Crash or stop-loss
+        5. **Risk Management** — Dynamic leverage with stop-loss, confidence gate, and cooldown after exits
 
-        ### New Features
+        ### Features
         - **Walk-Forward Optimization** — Retrain HMM daily on a sliding window for true out-of-sample evaluation
-        - **VIX Feature** — Market fear gauge as 4th HMM input feature
+        - **Configurable Strategy** — Tune entry threshold, stop-loss, min confidence, and leverage
         - **Hyperparameter Sweep** — Find optimal lookback period by maximizing 30-day Sharpe ratio
         """
     )

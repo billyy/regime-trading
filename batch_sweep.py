@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Batch sweep_lookback for all symbols, saving results to JSON."""
-import json, time, sys
-sys.path.insert(0, "/Users/billy/.openclaw/workspace/regime-trading")
+import json, os, time, sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from regime_engine import sweep_lookback_periods
 
 SYMBOLS = [
@@ -32,7 +33,8 @@ for i, sym in enumerate(SYMBOLS):
         results[sym] = {"error": str(e)}
         print(f"    {sym}: ERROR - {e}", flush=True)
 
-with open("/Users/billy/.openclaw/workspace/regime-trading/sweep_results.json", "w") as f:
+output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sweep_results.json")
+with open(output_path, "w") as f:
     json.dump(results, f, indent=2)
 
-print(f"\nDone! Results saved to sweep_results.json", flush=True)
+print(f"\nDone! Results saved to {output_path}", flush=True)

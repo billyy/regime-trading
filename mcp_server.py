@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from mcp.server.fastmcp import FastMCP
 
+from config import DEFAULT_LEVERAGE, ENTRY_THRESHOLD
 from regime_engine import (
     run_regime_detection,
     run_regime_detection_wfo,
@@ -34,6 +35,8 @@ def get_recommendation(
     ticker: str,
     period_days: int = 730,
     n_components: int = 7,
+    leverage: float = DEFAULT_LEVERAGE,
+    entry_threshold: int = ENTRY_THRESHOLD,
 ) -> str:
     """Get the current HMM regime and trading recommendation for a ticker.
 
@@ -45,6 +48,8 @@ def get_recommendation(
         ticker: Stock/crypto symbol (e.g. "SPY", "BTC-USD")
         period_days: Lookback period in days (max 730 for hourly data)
         n_components: Number of HMM states (default 7)
+        leverage: Maximum leverage multiplier (default 2.5)
+        entry_threshold: Minimum conditions to pass for entry (default 6 of 8)
     """
     try:
         regime_df, model, scaler, mapping, features = run_regime_detection(
@@ -65,8 +70,8 @@ def get_recommendation(
         # Determine recommendation
         if regime in ("Bearish", "Crash"):
             recommendation = "EXIT / STAY CASH"
-        elif regime in ("Bullish", "Bull Run") and passed >= 7:
-            eff_lev = round(2.5 * confidence, 2)
+        elif regime in ("Bullish", "Bull Run") and passed >= entry_threshold:
+            eff_lev = round(leverage * confidence, 2)
             recommendation = f"LONG (suggested leverage: {eff_lev}x)"
         else:
             recommendation = "CASH (conditions not met)"
@@ -84,7 +89,7 @@ def get_recommendation(
             f"HMM Confidence: {confidence:.1%}",
             f"Recommendation: {recommendation}",
             f"",
-            f"Entry Conditions ({passed}/{total} passed):",
+            f"Entry Conditions ({passed}/{total} passed, need >= {entry_threshold}):",
             *cond_lines,
         ])
 
@@ -99,6 +104,8 @@ def get_recommendation_wfo(
     n_components: int = 7,
     train_window_days: int = 365,
     n_seeds: int = 3,
+    leverage: float = DEFAULT_LEVERAGE,
+    entry_threshold: int = ENTRY_THRESHOLD,
 ) -> str:
     """Get regime recommendation using Walk-Forward Optimization (out-of-sample).
 
@@ -111,6 +118,8 @@ def get_recommendation_wfo(
         n_components: Number of HMM states (default 7)
         train_window_days: Sliding training window in days
         n_seeds: Number of random seeds per HMM fit
+        leverage: Maximum leverage multiplier (default 2.5)
+        entry_threshold: Minimum conditions to pass for entry (default 6 of 8)
     """
     try:
         regime_df, features = run_regime_detection_wfo(
@@ -129,8 +138,8 @@ def get_recommendation_wfo(
 
         if regime in ("Bearish", "Crash"):
             recommendation = "EXIT / STAY CASH"
-        elif regime in ("Bullish", "Bull Run") and passed >= 7:
-            eff_lev = round(2.5 * confidence, 2)
+        elif regime in ("Bullish", "Bull Run") and passed >= entry_threshold:
+            eff_lev = round(leverage * confidence, 2)
             recommendation = f"LONG (suggested leverage: {eff_lev}x)"
         else:
             recommendation = "CASH (conditions not met)"
@@ -148,7 +157,7 @@ def get_recommendation_wfo(
             f"HMM Confidence: {confidence:.1%}",
             f"Recommendation: {recommendation}",
             f"",
-            f"Entry Conditions ({passed}/{total} passed):",
+            f"Entry Conditions ({passed}/{total} passed, need >= {entry_threshold}):",
             *cond_lines,
         ])
 

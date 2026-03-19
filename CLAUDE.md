@@ -20,17 +20,19 @@ There are no tests, linter, or build steps configured.
 
 ## Architecture
 
-**Data flow:** yfinance fetch → feature engineering → HMM training → regime labels + confidence → technical indicators → entry/exit signals → backtest → performance metrics
+**Data flow:** yfinance fetch → data validation → feature engineering → HMM training → regime labels + confidence → technical indicators → entry/exit signals (with stop-loss, confidence gate) → backtest → performance metrics
 
 ### Core Modules
 
-- **`regime_engine.py`** — HMM training and regime detection. Trains a 7-state Gaussian HMM on features (log returns, price range, volume volatility, historical volatility). Maps HMM states to 7 regimes (Crash → Bull Run) by sorting on mean return. Supports Walk-Forward Optimization (WFO) with daily retraining on sliding windows. Includes lookback period hyperparameter sweep maximizing 30-day Sharpe ratio.
+- **`config.py`** — Centralized configuration constants (DEFAULT_LOOKBACK, DEFAULT_LEVERAGE, ENTRY_THRESHOLD, RSI_OVERBOUGHT, STOP_LOSS_PCT, MIN_CONFIDENCE, etc.). All modules import from here.
 
-- **`strategy.py`** — Signal generation and backtesting. Computes 8 technical indicators (RSI, Momentum, ATR, Volume trend, ADX, SMA, MACD). Entry requires Bullish/Bull Run regime AND ≥7/8 indicator conditions met. Exits on Bearish/Crash regimes. Dynamic leverage scales by HMM confidence (max 2.5x default). 48-hour cooldown after exits.
+- **`regime_engine.py`** — HMM training and regime detection. Dynamically generates regime labels for any n_components (3–10+), always ensuring Bullish/Bull Run map to top states and Bearish/Crash to bottom states. Validates fetched data for quality. Supports WFO with logged exceptions. Lookback sweep supports optional eval_start_date for normalized comparison.
 
-- **`app.py`** — Streamlit dashboard UI. Configures ticker, period, HMM components, leverage. Visualizes regime timeline, equity curves, trade logs. Uses `st.session_state` for persistence.
+- **`strategy.py`** — Signal generation and backtesting. Entry requires Bullish/Bull Run regime AND configurable threshold of conditions met, plus minimum HMM confidence. Exits on Bearish/Crash regimes, stop-loss, or margin call. Negative equity protection floors equity at zero. Asserts minimum bars after warmup.
 
-- **`mcp_server.py`** — MCP server exposing 4 tools: `get_recommendation`, `get_recommendation_wfo`, `run_backtest`, `sweep_lookback`. Wraps regime_engine and strategy modules for Claude Code integration.
+- **`app.py`** — Streamlit dashboard UI with `st.cache_data` caching. Sidebar controls for entry threshold, stop-loss %, min confidence, plus existing ticker/period/leverage controls.
+
+- **`mcp_server.py`** — MCP server exposing 4 tools with configurable leverage and entry threshold parameters.
 
 ## Key Parameters
 
@@ -40,7 +42,10 @@ There are no tests, linter, or build steps configured.
 | HMM components | 3–10 states | 7 |
 | Max leverage | 1.0–10.0x | 2.5x |
 | WFO training window | 180–730 days | — |
-| Entry threshold | — | 7 of 8 conditions |
+| Entry threshold | 1–8 conditions | 6 of 8 |
+| Stop-loss | 0–50% | 10% |
+| Min confidence | 0.0–1.0 | 0.5 |
+| RSI overbought | — | 70 |
 | Cooldown after exit | — | 48 hours |
 
 ## Dependencies
